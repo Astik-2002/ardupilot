@@ -420,7 +420,7 @@ void AP_DDS_Client::update_topic(geographic_msgs_msg_GeoPoseStamped& msg)
 void AP_DDS_Client::update_topic(sensor_msgs_msg_Imu& msg)
 {
     update_topic(msg.header.stamp);
-    strcpy(msg.header.frame_id, BASE_LINK_FRAME_ID);
+    strcpy(msg.header.frame_id, BASE_LINK_NED_FRAME_ID);
 
     auto &imu = AP::ins();
     auto &ahrs = AP::ahrs();
