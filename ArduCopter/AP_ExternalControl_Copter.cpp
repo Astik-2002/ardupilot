@@ -29,6 +29,19 @@ bool AP_ExternalControl_Copter::set_linear_velocity_and_yaw_rate(const Vector3f 
     return true;
 }
 
+/*
+  Sets the target orientation, angular velocity, angular acceleration and desired thrust
+  in body frame
+*/
+bool AP_ExternalControl_Copter::set_angular_goals(const Quaternion &orientation, const Vector3f &angular_velocity, const Vector3f &angular_acceleration, const float &thrust)
+{
+    if (!ready_for_external_control()) {
+        return false;
+    }
+    copter.mode_guided.set_angle(orientation, angular_velocity, angular_acceleration, thrust, true);
+    return true;
+}
+
 bool AP_ExternalControl_Copter::set_global_position(const Location& loc)
 {
     // Check if copter is ready for external control and returns false if it is not.
