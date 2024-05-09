@@ -42,6 +42,8 @@ class IMUPublisherSubscriber(Node):
         self.command_msg = AngularVelandAccn()
         self.max_thrust = 19.8
         self.traj = Trajectory()
+        self.z_i = 0
+        self.Ts = 0.01
 
 
     def pose_callback(self, msg):
@@ -161,11 +163,22 @@ class IMUPublisherSubscriber(Node):
     def acceleration_setpoint(self):
         vel = self.current_velocity()
         pos = self.current_position()
-        desired_pos = np.array([10, 5, -10])
+        desired_pos = np.array([5, 10, -10])
         desired_vel = np.array([0, 0, 0])
         pos_error = desired_pos - pos
         vel_error = desired_vel - vel
-        acc_sp = 5*pos_error + 4*vel_error
+        acc_sp = np.zeros(3)
+        kp_x = 0.3
+        kd_x = 0.5
+        kp_y = kp_x
+        kd_y = kd_x
+        kp_z = 1.5
+        kd_z = 1.4
+        ki_z = 0.2
+        self.z_i += ki_z*pos_error[2]*self.Ts
+        acc_sp[0] = kp_x*pos_error[0] + kd_x*vel_error[0]
+        acc_sp[1] = kp_y*pos_error[1] + kd_y*vel_error[1]
+        acc_sp[2] = kp_z*pos_error[2] + kd_z*vel_error[2] + self.z_i - 9.81
 
         return acc_sp
     
