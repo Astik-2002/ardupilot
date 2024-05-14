@@ -56,18 +56,17 @@ class IMUPublisherSubscriber(Node):
 
     def calculate_trajectory(self):
         current_time = self.get_clock().now().nanoseconds
-        # t = (current_time - self.start_time)/1e9 # converting from nanoseconds to seconds
-        # self.sDes = self.traj.desiredState(t,0.01)
-        # self.desPos = np.array([self.sDes[0], self.sDes[1], self.sDes[2]])
-        # self.desVel = np.array([self.sDes[3], self.sDes[4], self.sDes[5]])
-        # self.desAcc = np.array([self.sDes[6], self.sDes[7], self.sDes[8]])
-        # self.desThr = self.sDes[9:12]
-        # self.desEul = self.sDes[12:15]
-        # self.desPQR = self.sDes[15:18]
-        # self.yawFF = self.sDes[18]
-        # self.desJerk = self.sDes[19:22]
-        # self.desSnap = self.sDes[22:25]
-        self.desPos = np.array([0, 0, 3])
+        t = (current_time - self.start_time)/1e9 # converting from nanoseconds to seconds
+        self.sDes = self.traj.desiredState(t,0.01)
+        self.desPos = np.array([self.sDes[0], self.sDes[1], self.sDes[2]])
+        self.desVel = np.array([self.sDes[3], self.sDes[4], self.sDes[5]])
+        self.desAcc = np.array([self.sDes[6], self.sDes[7], self.sDes[8]])
+        self.desThr = self.sDes[9:12]
+        self.desEul = self.sDes[12:15]
+        self.desPQR = self.sDes[15:18]
+        self.yawFF = self.sDes[18]
+        self.desJerk = self.sDes[19:22]
+        self.desSnap = self.sDes[22:25]
 
     def quat_mult(self,q, p):
         # Extract scalar and vector parts
@@ -163,8 +162,8 @@ class IMUPublisherSubscriber(Node):
     def acceleration_setpoint(self):
         vel = self.current_velocity()
         pos = self.current_position()
-        desired_pos = np.array([5, 10, -10])
-        desired_vel = np.array([0, 0, 0])
+        desired_pos = self.desPos
+        desired_vel = self.desVel
         pos_error = desired_pos - pos
         vel_error = desired_vel - vel
         acc_sp = np.zeros(3)
@@ -172,14 +171,15 @@ class IMUPublisherSubscriber(Node):
         kd_x = 0.5
         kp_y = kp_x
         kd_y = kd_x
-        kp_z = 1.5
-        kd_z = 1.4
-        ki_z = 0.2
+        kp_z = 2.5
+        kd_z = 2.0
+        ki_z = 0.09
         self.z_i += ki_z*pos_error[2]*self.Ts
+        self.z_i = np.clip(self.z_i, -1, 1)
         acc_sp[0] = kp_x*pos_error[0] + kd_x*vel_error[0]
         acc_sp[1] = kp_y*pos_error[1] + kd_y*vel_error[1]
         acc_sp[2] = kp_z*pos_error[2] + kd_z*vel_error[2] + self.z_i - 9.81
-
+        acc_sp = acc_sp + self.desAcc
         return acc_sp
     
     def normalized_thrust_setpoint(self, des_accn):
@@ -202,7 +202,7 @@ class IMUPublisherSubscriber(Node):
     def desired_orientation(self, des_accn):
         # Create Full Desired Quaternion Based on Thrust Setpoint and Desired Yaw Angle
         # ---------------------------
-        yaw_sp = 0.0
+        yaw_sp = self.desEul[2]
         # Desired body_z axis direction
         des_accn = -self.normalize_vector(des_accn)
         body_z = des_accn
@@ -248,22 +248,24 @@ class IMUPublisherSubscriber(Node):
     def computeNominalReference(self):
         des_acceleration = self.acceleration_setpoint()
         des_orientation = self.desired_orientation(des_acceleration)
-        roll, pitch, yaw = self.quaternion_to_euler(des_orientation)
-        rollc, pitchc, yawc = self.quaternion_to_euler(self.current_orientation())
+        thrust = self.normalized_thrust_setpoint(des_acceleration)
+
+        #roll, pitch, yaw = self.quaternion_to_euler(des_orientation)
+        #rollc, pitchc, yawc = self.quaternion_to_euler(self.current_orientation())
 
         #self.get_logger().info('current attitude:  r: {:.2f} p: {:.2f} y: {:.2f}]'.format(rollc, pitchc, yawc))
-        self.get_logger().info('desired acceleration x = {:,.2f}, y = {:,.2f}, z = {:,.2f}'.format(des_acceleration[0], des_acceleration[1], des_acceleration[2])) 
+        #self.get_logger().info('desired acceleration x = {:,.2f}, y = {:,.2f}, z = {:,.2f}'.format(des_acceleration[0], des_acceleration[1], des_acceleration[2])) 
         
         body_x = self.rotate_vector_by_quaternion(np.array([1, 0, 0]), des_orientation)
         body_y = self.rotate_vector_by_quaternion(np.array([0, 1, 0]), des_orientation)
-        body_z = self.rotate_vector_by_quaternion(np.array([0, 0, 1]), des_orientation)
+        body_z = self.rotate_vector_by_quaternion(np.array([0, 0, -1]), des_orientation)
         
         reference_heading = self.desEul[2]
         q_heading = np.array([math.cos(reference_heading/2), 0, 0, math.sin(reference_heading/2)])
         x_C = self.rotate_vector_by_quaternion(np.array([1, 0, 0]), q_heading)
         y_C = self.rotate_vector_by_quaternion(np.array([0, 1, 0]), q_heading)
         
-        ref_acc = self.desAcc + self.gravity
+        ref_acc = des_acceleration
         pqr_sp = np.zeros(3)
         pqr_dot_sp = np.zeros(3)
         if(np.isclose(np.linalg.norm(ref_acc), 0)):
@@ -272,11 +274,12 @@ class IMUPublisherSubscriber(Node):
         else:    
             pqr_sp[0] = -1/np.linalg.norm(ref_acc)*np.dot(body_y,self.desJerk)
             pqr_sp[1] =  1/np.linalg.norm(ref_acc)*np.dot(body_x,self.desJerk)
+
         if(np.isclose(np.linalg.norm(np.cross(y_C,body_z)), 0)):
             pqr_sp[2] = 0.0
         else:
             pqr_sp[2] = 1/np.linalg.norm(np.cross(y_C,body_z))*(self.yawFF*np.dot(x_C,body_x) + pqr_sp[1]*np.dot(y_C,body_z))
-        #print("ang rate setpoint",pqr_sp)
+
         thrust_dot = np.dot(body_z,self.desJerk)
         if(np.isclose(np.linalg.norm(ref_acc), 0)):
             pqr_dot_sp[0] = 0.0
@@ -293,26 +296,30 @@ class IMUPublisherSubscriber(Node):
                                                      - pqr_sp[0]*pqr_sp[2]*np.dot(y_C,body_z)
                                                      + pqr_dot_sp[1]*np.dot(y_C,body_z))
             
-        self.command_msg.angular_rate.x = 0.0
-        self.command_msg.angular_rate.y = 0.0
-        self.command_msg.angular_rate.z = 0.0
+        self.command_msg.angular_rate.x = pqr_sp[0]
+        self.command_msg.angular_rate.y = pqr_sp[1]
+        self.command_msg.angular_rate.z = pqr_sp[2]
 
         self.command_msg.angular_acceleration.x = pqr_dot_sp[0]
         self.command_msg.angular_acceleration.y = pqr_dot_sp[1]
         self.command_msg.angular_acceleration.z = pqr_dot_sp[2]
+        
+        # self.command_msg.angular_rate.x = 0.0
+        # self.command_msg.angular_rate.y = 0.0
+        # self.command_msg.angular_rate.z = 0.0
 
+        # self.command_msg.angular_acceleration.x = 0.0
+        # self.command_msg.angular_acceleration.y = 0.0
+        # self.command_msg.angular_acceleration.z = 0.0
+        
+        
+        self.command_msg.orientation = Quaternion(x = des_orientation[0], y = des_orientation[1], z = des_orientation[2], w = des_orientation[3])
+        self.command_msg.thrust = thrust
 
     def prepare_angular_vel_accn_message(self):
         # Prepare the AngularVelandAccn message
         self.calculate_trajectory()
-        des_acc = self.acceleration_setpoint()
-        orientation = self.desired_orientation(des_acc)
-        thrust = self.normalized_thrust_setpoint(des_acc)
         self.computeNominalReference()
-        self.command_msg.orientation = Quaternion(x = orientation[0], y = orientation[1], z = orientation[2], w = orientation[3])
-        self.get_logger().info('desired orientation x = {:,.2f}, y = {:,.2f}, z = {:,.2f}, w = {:,.2f}'.format(orientation[0], orientation[1], orientation[2], orientation[3])) 
-
-        self.command_msg.thrust = thrust
         # Publish the AngularVelandAccn message
         self.publisher.publish(self.command_msg)
         #self.get_logger().info('Published command Message, thrust = {:.2f}'.format(thrust))

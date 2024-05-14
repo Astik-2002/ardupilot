@@ -13,20 +13,23 @@ deg2rad = pi/180.0
 
 def makeWaypoints():
     
-    v_average = 10
+    v_average = 3
 
     t_ini = 3
-    t = np.array([5, 5, 5, 5])
+    t = np.array([5, 5, 5, 5, 5, 5, 5])
     
     wp_ini = np.array([0, 0, 0])
-    wp = np.array([[0, 0, 10],
-                   [0, 0, 20],
-                   [0, 0, 30],
-                   [0, 0, 40],
-                   [0, 0, 50]])
+    wp = np.array([[0, 0, -10],
+                   [-9, 5, -10],
+                   [-14, 0, -10],
+                   [-9, -5, -10],
+                   [9, 5, -10],
+                   [14, 0, -10],
+                   [9, -5, -10],
+                   [0, 0, -11]])
 
     yaw_ini = 0    
-    yaw = np.array([0, 0, 0, 0, 0])
+    yaw = np.array([0, 0, 0, 0, 0, 0, 0, 0])
 
     t = np.hstack((t_ini, t)).astype(float)
     wp = np.vstack((wp_ini, wp)).astype(float)

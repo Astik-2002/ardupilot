@@ -224,6 +224,9 @@ public:
     // Return the angular velocity of the target (setpoint) [rad/s] in the target attitude frame
     const Vector3f& get_attitude_target_ang_vel() const { return _ang_vel_target;}
 
+    // Return the target angular acceleration setpoint [rad/s^2] only for use with custom controllers
+    const Vector3f& get_attitude_target_ang_accn() const { return _ang_acceleration_target;}
+    
     // Return the angle between the target thrust vector and the current thrust vector.
     float get_att_error_angle_deg() const { return degrees(_thrust_error_angle); }
 

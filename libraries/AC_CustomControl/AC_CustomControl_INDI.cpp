@@ -155,6 +155,7 @@ Vector3f AC_CustomControl_INDI::update(void)
 
     // run custom controller after here
      Quaternion attitude_body, attitude_target;
+     Vector3f angular_acc_target = _att_control->get_attitude_target_ang_accn();
     _ahrs->get_quat_body_to_ned(attitude_body);
     attitude_target = _att_control->get_attitude_target_quat();
     Vector3f gyro_latest = _ahrs->get_gyro_latest();
@@ -167,7 +168,7 @@ Vector3f AC_CustomControl_INDI::update(void)
     Vector3f ang_vel_body_feedforward = rotation_target_to_body * _att_control->get_attitude_target_ang_vel();
 
     Vector3f ang_vel_target = run_attitude_controller(attitude_target, attitude_body);
-    run_angvel_controller(ang_vel_target + ang_vel_body_feedforward, gyro_latest, Vector3f(0.0f, 0.0f, 0.0f));
+    run_angvel_controller(ang_vel_target + ang_vel_body_feedforward, gyro_latest, angular_acc_target);
 
     // return what arducopter main controller outputted
     return Vector3f(_torque_cmd_scaled.x, _torque_cmd_scaled.y, _torque_cmd_scaled.z);
